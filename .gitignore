@@ -1,0 +1,15 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+venv/
+.venv/
+outputs/*
+!outputs/.gitkeep
+.DS_Store
+
+# Keep participant photos local; only the attributed demo image is published.
+test_images/*
+!test_images/.gitkeep
+!test_images/barack_obama.jpg
