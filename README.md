@@ -227,10 +227,20 @@ Implementation references:
   Amoy hash storage and independent verification all succeeded. Altering the
   saved record made CLI verification return `false` with exit status 1.
 - Phase 5: source, pinned dependencies, configuration example and attributed
-  demo photo are prepared for the private repository at
+  demo photo are published in the private repository at
   [darain24/hhgoa-task3](https://github.com/darain24/hhgoa-task3). Personal photos,
   secrets, virtual environments and local run outputs are excluded.
-- The full clean-clone dry run, recording and submission remain outstanding. This demo does not validate the original face-search requirement.
+- Phase 6 passed on September 7, 2026: cloned the private GitHub repository at
+  commit `eca7b97`, installed requirements with pip in a fresh Python 3.12 venv,
+  downloaded RetinaFace into an empty model cache, and completed the live demo
+  on macOS Apple Silicon. `pip check` passed. Both standalone verification
+  commands passed with only RPC configuration; an altered record returned
+  `false` and exit status 1. No application code fixes were needed.
+  [Fresh-clone transaction](https://amoy.polygonscan.com/tx/0x4a8a687f517417fbf958e6ceacbe310781503fc40f72bb8cea5aa48bbe78d2e6).
+  Local logs and receipts are saved in `outputs/phase6/`; these are not bundled
+  in Git. The check used the same host, existing GitHub authorization and a
+  locally supplied funded test wallet; it is not a cross-platform validation.
+- Recording and submission remain outstanding. This demo does not validate the original face-search requirement.
 
 
 ## Reproducible public-figure demo
