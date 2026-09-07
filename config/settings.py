@@ -19,3 +19,8 @@ def require_env(name: str) -> str:
     if not value or value.startswith("your_") or ".example" in value:
         raise ValueError(f"Set {name} in the project .env file.")
     return value
+
+
+def get_serpapi_key() -> str:
+    """Return the SERPAPI_KEY from the environment."""
+    return require_env("SERPAPI_KEY")

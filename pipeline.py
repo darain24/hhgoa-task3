@@ -14,10 +14,10 @@ from src.blockchain import (
     verify_hash_on_chain,
 )
 from src.face_detect import FaceNotDetectedError, detect_face
-from src.web_search import SearchAPIError, fetch_known_post
+from src.web_search import SearchAPIError, fetch_known_post, search_image_with_serpapi
 
 
-def run_pipeline(image_path: str, post_url: str) -> None:
+def run_pipeline(image_path: str, post_url: str | None = None) -> None:
     """Run the three stages and persist a verifiable record; propagate stage errors."""
     if not Path(image_path).is_file():
         raise FaceNotDetectedError("Provide a readable local image file.")
@@ -29,20 +29,28 @@ def run_pipeline(image_path: str, post_url: str) -> None:
     )
     face = detect_face(image_path)
     print(f"[1/4] Face detected — confidence: {face['confidence']:.4f}", flush=True)
-    print("[2/4] Fetching the user-provided URL live…", flush=True)
-    evidence = fetch_known_post(post_url)
-    selected = evidence["selected_match"]
-    print(f"[2/4] Supplied page retrieved — {selected['url']}", flush=True)
-    print("URL supplied by user; identity relationship is not verified.", flush=True)
+    if post_url:
+        print("[2/4] Fetching the user-provided URL live…", flush=True)
+        evidence = fetch_known_post(post_url)
+        selected = evidence["selected_match"]
+        print(f"[2/4] Supplied page retrieved — {selected['url']}", flush=True)
+        print("URL supplied by user; identity relationship is not verified.", flush=True)
+    else:
+        print("[2/4] Searching for the face online using SerpApi Google Lens…", flush=True)
+        evidence = search_image_with_serpapi(image_path)
+        selected = evidence["selected_match"]
+        label = "Social post" if evidence["selection_method"] == "serpapi_social_match" else "Public URL"
+        print(f"[2/4] {label} retrieved via SerpApi — {selected['url']} (Rank {selected.get('rank', 1)}, Domain: {selected['source_domain']})", flush=True)
+
     record = {
         "source_image_sha256": face["source_image_sha256"],
         "matched_url": selected["url"],
         "matched_domain": selected["source_domain"],
-        "match_rank": 1,
+        "match_rank": selected.get("rank", 1),
         "detection_model": face["detector"],
         "recognition_model": None,
         "timestamp": evidence["query_timestamp"],
-        "selection_method": "user_provided_url",
+        "selection_method": evidence["selection_method"],
         "page_content_sha256": selected["page_content_sha256"],
     }
     # Persist the exact preimage before any irreversible chain write.
@@ -57,6 +65,7 @@ def run_pipeline(image_path: str, post_url: str) -> None:
     verified = verify_hash_on_chain(receipt["tx_hash"], digest)
     receipt["verified"] = verified
     (OUTPUT_DIR / "tx_receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
+    print(f"Matched post: {selected['url']}", flush=True)
     print(f"Explorer: {receipt['explorer_url']}", flush=True)
     print(f"Hash verified on-chain: {str(verified).lower()}", flush=True)
     if not verified:
@@ -72,8 +81,6 @@ def main() -> int:
     modes.add_argument("--verify-record", nargs=2, metavar=("TX_HASH", "RECORD_JSON"))
     parser.add_argument("--post-url", help="Known public post URL you provide")
     args = parser.parse_args()
-    if args.image and not args.post_url:
-        parser.error("--image requires --post-url")
     if not args.image and args.post_url:
         parser.error("--post-url is only valid with --image")
     try:
