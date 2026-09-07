@@ -57,11 +57,20 @@ def check_chain_ready() -> None:
         account = client.eth.account.from_key(require_env("WALLET_PRIVATE_KEY"))
         if account.address != address:
             raise BlockchainError("WALLET_ADDRESS does not match the private key.")
-        if client.eth.get_balance(address) == 0:
-            raise BlockchainError("Fund the test wallet with Amoy faucet POL first.")
-    except (ValueError, Web3Exception, requests.RequestException):
+        balance = client.eth.get_balance(address)
+        gas_price = client.eth.gas_price
+        min_required = 30000 * gas_price
+        if balance < min_required:
+            bal_pol = client.from_wei(balance, "ether")
+            req_pol = client.from_wei(min_required, "ether")
+            raise BlockchainError(
+                f"Insufficient Amoy POL for gas fees. Balance is {bal_pol:.6f} POL, but estimated required fee is {req_pol:.6f} POL. Please fund your test wallet using a faucet (e.g., https://openfaucet.org/polygon-amoy or https://faucet.polygon.technology/)."
+            )
+    except BlockchainError:
+        raise
+    except (ValueError, Web3Exception, requests.RequestException) as exc:
         raise BlockchainError(
-            "Check Amoy RPC, wallet configuration and connection."
+            f"Check Amoy RPC, wallet configuration and connection: {exc}"
         ) from None
 
 
@@ -79,6 +88,15 @@ def upload_hash_to_chain(hash_hex: str) -> dict[str, Any]:
             raise BlockchainError(
                 "Use a dedicated ordinary test wallet without account code."
             )
+        balance = client.eth.get_balance(address)
+        gas_price = client.eth.gas_price
+        min_required = 30000 * gas_price
+        if balance < min_required:
+            bal_pol = client.from_wei(balance, "ether")
+            req_pol = client.from_wei(min_required, "ether")
+            raise BlockchainError(
+                f"Insufficient Amoy POL for gas fees. Balance is {bal_pol:.6f} POL, but minimum fee is {req_pol:.6f} POL. Fund your test wallet with faucet POL first."
+            )
         transaction = {
             "chainId": 80002,
             "from": address,
@@ -86,13 +104,10 @@ def upload_hash_to_chain(hash_hex: str) -> dict[str, Any]:
             "value": 0,
             "data": hash_hex,
             "nonce": client.eth.get_transaction_count(address, "pending"),
-            "gasPrice": client.eth.gas_price,
+            "gasPrice": gas_price,
         }
         transaction["gas"] = (client.eth.estimate_gas(transaction) * 120 + 99) // 100
-        if (
-            client.eth.get_balance(address)
-            < transaction["gas"] * transaction["gasPrice"]
-        ):
+        if balance < transaction["gas"] * transaction["gasPrice"]:
             raise BlockchainError("Insufficient Amoy POL for the transaction fee.")
         signed = account.sign_transaction(transaction)
         # Compute and persist the identifier before submission: an RPC timeout may
@@ -125,11 +140,18 @@ def upload_hash_to_chain(hash_hex: str) -> dict[str, Any]:
             json.dumps(pending, indent=2) + "\n"
         )
         return pending
-    except (ValueError, Web3Exception, requests.RequestException, OSError):
+    except BlockchainError:
+        raise
+    except (ValueError, Web3Exception, requests.RequestException, OSError) as exc:
+        err_msg = str(exc)
+        if "exceeds allowance" in err_msg or "insufficient funds" in err_msg.lower():
+            bal_pol = client.from_wei(client.eth.get_balance(address), "ether")
+            raise BlockchainError(
+                f"Insufficient Amoy POL for transaction fee (current balance: {bal_pol:.6f} POL). Please fund your test wallet using a faucet."
+            ) from None
         suffix = f" Check {tx_hash} before sending again." if tx_hash else ""
         raise BlockchainError(
-            "Transaction failed or confirmation is unavailable; check RPC, wallet and outputs/."
-            + suffix
+            f"Transaction failed or confirmation is unavailable ({err_msg[:120]}); check RPC, wallet and outputs/.{suffix}"
         ) from None
 
 
